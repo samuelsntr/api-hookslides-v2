@@ -2,10 +2,12 @@ import { AppError, PLAN_LIMITS } from '../../constants/errors.js';
 import { validateCarousel } from '../../validators/carousel.js';
 import { validateEditorialBrief } from '../../validators/editorialBrief.js';
 import { extractJson, normalizeContent } from '../../utils/content.js';
+import { normalizePlan } from '../../constants/plans.js';
 
 export function createGenerationService({ contentService, aiService, historyRepository, clock = () => new Date(), createId }) {
   return {
     async generate({ input, sourceType, strategy, template, language = 'english', userId, plan = 'free' }) {
+      plan = normalizePlan(plan);
       const limit = PLAN_LIMITS[plan] ?? PLAN_LIMITS.free;
       if (limit !== Infinity && historyRepository.countThisMonth(userId) >= limit) {
         throw new AppError('Monthly carousel generation limit reached.', {

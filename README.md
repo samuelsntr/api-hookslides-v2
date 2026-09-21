@@ -20,6 +20,8 @@ Set at least one of `GROQ_API_KEY` or `OPENAI_API_KEY`. Groq is primary when con
 - `GET /api/history?page=1&limit=20`
 - `GET /api/history/:id`
 - `DELETE /api/history/:id`
+- `GET /api/history/:id/editor` (Creator/Pro)
+- `PATCH /api/history/:id/editor` (Creator/Pro, revision protected)
 - `GET /health`
 
 Supported source types: `topic`, `article`, `youtube`. Article extraction uses Mozilla Readability after a size-limited, public-URL-only fetch. YouTube extraction uses the free `youtube-transcript` InnerTube/web fallback and accepts watch, short-link, Shorts, and embed URLs. Supported strategies: `viral_hook`, `storytelling`, `actionable_value`. Templates: `template_1`, `template_2`, `template_3`, `template_4`.

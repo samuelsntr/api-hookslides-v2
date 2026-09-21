@@ -10,10 +10,16 @@ export function runMigrations(db) {
   for (const name of fs.readdirSync(dir).filter((file) => file.endsWith('.sql')).sort()) {
     if (db.prepare('SELECT 1 FROM schema_migrations WHERE name = ?').get(name)) continue;
     const sql = fs.readFileSync(path.join(dir, name), 'utf8');
-    db.transaction(() => {
-      db.exec(sql);
-      db.prepare('INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)').run(name, new Date().toISOString());
-    })();
+    const disablesForeignKeys = /PRAGMA\s+foreign_keys\s*=\s*off/i.test(sql);
+    if (disablesForeignKeys) db.pragma('foreign_keys = OFF');
+    try {
+      db.transaction(() => {
+        db.exec(sql);
+        db.prepare('INSERT INTO schema_migrations (name, applied_at) VALUES (?, ?)').run(name, new Date().toISOString());
+      })();
+    } finally {
+      if (disablesForeignKeys) db.pragma('foreign_keys = ON');
+    }
   }
 }
 

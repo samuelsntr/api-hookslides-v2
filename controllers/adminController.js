@@ -198,7 +198,7 @@ export function createAdminController(db) {
       const user = db.prepare('SELECT id, username, plan, created_at FROM users WHERE id = ?').get(id);
       return res.json({
         success: true,
-        message: plan === 'premium' ? 'User upgraded to Pro.' : 'User changed to the Free plan.',
+        message: plan === 'free' ? 'User changed to the Free plan.' : `User changed to the ${plan === 'pro' ? 'Pro' : 'Creator'} plan.`,
         data: user,
       });
     },

@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { LANGUAGES, SOURCE_TYPES, STRATEGIES, TEMPLATES } from '../constants/values.js';
+import { LANGUAGES, SLIDE_TYPES, SOURCE_TYPES, STRATEGIES, TEMPLATES } from '../constants/values.js';
+import { PLANS } from '../constants/plans.js';
 import { LIMITS } from '../utils/content.js';
 
 const base = z.object({ input: z.string().trim().min(1).max(LIMITS.input), sourceType: z.enum(SOURCE_TYPES) }).strict();
@@ -11,4 +12,21 @@ export const generateRequestSchema = base.extend({
 export const extractRequestSchema = base;
 export const historyQuerySchema = z.object({ page: z.coerce.number().int().min(1).default(1), limit: z.coerce.number().int().min(1).max(50).default(20) }).strict();
 export const idParamSchema = z.object({ id: z.string().uuid() }).strict();
-export const adminUserPlanSchema = z.object({ plan: z.enum(['free', 'premium']) }).strict();
+export const adminUserPlanSchema = z.object({ plan: z.enum(PLANS) }).strict();
+
+const editableSlideSchema = z.object({
+  type: z.string(),
+  heading: z.string().trim().min(1).max(LIMITS.heading),
+  body: z.string().trim().min(1).max(LIMITS.body),
+}).strict();
+
+export const editorUpdateSchema = z.object({
+  slides: z.array(editableSlideSchema).length(6),
+  expectedRevision: z.number().int().min(1),
+}).strict().superRefine((value, ctx) => {
+  value.slides.forEach((slide, index) => {
+    if (slide.type !== SLIDE_TYPES[index]) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['slides', index, 'type'], message: `Expected ${SLIDE_TYPES[index]}` });
+    }
+  });
+});

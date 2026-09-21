@@ -57,16 +57,16 @@ test('admin endpoints require x-admin-password header', async () => {
   assert.equal(usersRes.status, 200);
   assert.ok(Array.isArray(usersBody.data.items));
 
-  // Admin can upgrade a user to Pro (stored as the existing premium plan).
+  // Admin can upgrade a user to Pro.
   const upgradeRes = await fetch(`http://127.0.0.1:${port}/api/admin/users/${testUserId}/plan`, {
     method: 'PATCH',
     headers: { 'x-admin-password': 'secretadmin', 'content-type': 'application/json' },
-    body: JSON.stringify({ plan: 'premium' })
+    body: JSON.stringify({ plan: 'pro' })
   });
   const upgradeBody = await upgradeRes.json();
   assert.equal(upgradeRes.status, 200);
-  assert.equal(upgradeBody.data.plan, 'premium');
-  assert.equal(db.prepare('SELECT plan FROM users WHERE id = ?').get(testUserId).plan, 'premium');
+  assert.equal(upgradeBody.data.plan, 'pro');
+  assert.equal(db.prepare('SELECT plan FROM users WHERE id = ?').get(testUserId).plan, 'pro');
 
   // The endpoint is strictly limited to supported plans.
   const invalidPlanRes = await fetch(`http://127.0.0.1:${port}/api/admin/users/${testUserId}/plan`, {

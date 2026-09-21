@@ -10,8 +10,8 @@ function currentMonthRange(now = new Date()) {
 
 export function createHistoryRepository(db) {
   const insert = db.prepare(`INSERT INTO carousels
-    (id, user_id, title, source_type, original_input, extracted_content, source_json, strategy, template, language, slides_json, summary, caption_ideas_json, hashtags_json, created_at, updated_at)
-    VALUES (@id, @userId, @title, @sourceType, @originalInput, @extractedContent, @sourceJson, @strategy, @template, @language, @slidesJson, @summary, @captionIdeasJson, @hashtagsJson, @createdAt, @updatedAt)`);
+    (id, user_id, title, source_type, original_input, extracted_content, source_json, strategy, template, language, slides_json, original_slides_json, revision, summary, caption_ideas_json, hashtags_json, created_at, updated_at)
+    VALUES (@id, @userId, @title, @sourceType, @originalInput, @extractedContent, @sourceJson, @strategy, @template, @language, @slidesJson, @originalSlidesJson, 1, @summary, @captionIdeasJson, @hashtagsJson, @createdAt, @updatedAt)`);
   const countThisMonth = db.prepare('SELECT COUNT(*) AS count FROM carousels WHERE user_id = ? AND created_at >= ? AND created_at < ?');
 
   function runInsert(record) {
@@ -20,6 +20,7 @@ export function createHistoryRepository(db) {
       language: record.language || 'english',
       sourceJson: record.source ? JSON.stringify(record.source) : null,
       slidesJson: JSON.stringify(record.slides),
+      originalSlidesJson: JSON.stringify(record.slides),
       captionIdeasJson: JSON.stringify(record.captionIdeas),
       hashtagsJson: JSON.stringify(record.hashtags),
     });
@@ -59,6 +60,14 @@ export function createHistoryRepository(db) {
       return { items: rows.map(toCarousel), total };
     },
     findCarouselById(id, userId) { return toCarousel(db.prepare('SELECT * FROM carousels WHERE id = ? AND user_id = ?').get(id, userId)); },
+    updateCarouselSlides({ id, userId, slides, expectedRevision, updatedAt }) {
+      const result = db.prepare(`UPDATE carousels
+        SET slides_json = ?, revision = revision + 1, updated_at = ?
+        WHERE id = ? AND user_id = ? AND revision = ?`)
+        .run(JSON.stringify(slides), updatedAt, id, userId, expectedRevision);
+      if (!result.changes) return null;
+      return toCarousel(db.prepare('SELECT * FROM carousels WHERE id = ? AND user_id = ?').get(id, userId));
+    },
     deleteCarousel(id, userId) { return db.prepare('DELETE FROM carousels WHERE id = ? AND user_id = ?').run(id, userId).changes > 0; }
   };
 }
