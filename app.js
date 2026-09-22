@@ -16,6 +16,8 @@ import { createExtractionController } from './controllers/extractionController.j
 import { createHistoryController } from './controllers/historyController.js';
 import { createAdminRoutes } from './routes/adminRoutes.js';
 import { createAdminController } from './controllers/adminController.js';
+import { createBrandRoutes } from './routes/brandRoutes.js';
+import { createBrandController } from './controllers/brandController.js';
 
 export function createApp({ services = {}, database } = {}) {
   const app = express();
@@ -36,6 +38,7 @@ export function createApp({ services = {}, database } = {}) {
     app.use('/api', createGenerationRoutes(createGenerationController(services.generation)));
     app.use('/api', createExtractionRoutes(createExtractionController(services.extraction)));
     app.use('/api', createHistoryRoutes(createHistoryController(services.history)));
+    if (services.brand && services.logoStorage) app.use('/api', createBrandRoutes(createBrandController({ repository: services.brand, storage: services.logoStorage })));
   }
   app.use(notFound);
   app.use(errorHandler);

@@ -5,6 +5,7 @@ import { z } from 'zod';
 const schema = z.object({
   PORT: z.coerce.number().int().min(1).max(65535).default(3000),
   DATABASE_PATH: z.string().min(1).default('./data/hookslides.sqlite'),
+  UPLOADS_PATH: z.string().min(1).default('./uploads'),
   GROQ_API_KEY: z.string().trim().optional(),
   OPENAI_API_KEY: z.string().trim().optional(),
   GROQ_MODEL: z.string().min(1).default('llama-3.3-70b-versatile'),
@@ -19,6 +20,7 @@ if (!parsed.GROQ_API_KEY && !parsed.OPENAI_API_KEY) {
 export const env = {
   port: parsed.PORT,
   databasePath: path.resolve(process.cwd(), parsed.DATABASE_PATH),
+  uploadsPath: path.resolve(process.cwd(), parsed.UPLOADS_PATH),
   groqApiKey: parsed.GROQ_API_KEY || null,
   openaiApiKey: parsed.OPENAI_API_KEY || null,
   groqModel: parsed.GROQ_MODEL,

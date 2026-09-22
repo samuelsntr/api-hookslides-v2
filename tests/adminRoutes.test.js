@@ -8,8 +8,26 @@ test('admin endpoints require x-admin-password header', async () => {
   const db = createDatabase(':memory:');
   runMigrations(db);
   const testUserId = '11111111-1111-4111-8111-111111111111';
+  const testCarouselId = '22222222-2222-4222-8222-222222222222';
   db.prepare('INSERT INTO users (id, username, password_hash, created_at) VALUES (?, ?, ?, ?)')
     .run(testUserId, 'plan_test_user', 'unused', '2026-09-21T00:00:00.000Z');
+  db.prepare(`
+    INSERT INTO carousels (
+      id, title, source_type, original_input, strategy, template, slides_json,
+      created_at, updated_at, user_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    testCarouselId,
+    'Admin delete test',
+    'topic',
+    'A test topic',
+    'viral_hook',
+    'template_1',
+    '[]',
+    '2026-09-21T00:00:00.000Z',
+    '2026-09-21T00:00:00.000Z',
+    testUserId
+  );
   const app = createApp({ database: db });
   const server = app.listen(0);
   await new Promise((resolve) => server.once('listening', resolve));
@@ -91,6 +109,53 @@ test('admin endpoints require x-admin-password header', async () => {
   const carouselsBody = await carouselsRes.json();
   assert.equal(carouselsRes.status, 200);
   assert.ok(Array.isArray(carouselsBody.data.items));
+
+  // User-hidden carousels remain available to admins and can be filtered.
+  db.prepare('UPDATE carousels SET user_deleted_at = ? WHERE id = ?')
+    .run('2026-09-22T00:00:00.000Z', testCarouselId);
+  const hiddenCarouselsRes = await fetch(`http://127.0.0.1:${port}/api/admin/carousels?visibility=hidden`, {
+    headers: { 'x-admin-password': 'secretadmin' }
+  });
+  const hiddenCarouselsBody = await hiddenCarouselsRes.json();
+  assert.equal(hiddenCarouselsRes.status, 200);
+  assert.equal(hiddenCarouselsBody.data.items.some((item) => item.id === testCarouselId && item.hiddenByUserAt), true);
+
+  const visibleCarouselsRes = await fetch(`http://127.0.0.1:${port}/api/admin/carousels?visibility=visible`, {
+    headers: { 'x-admin-password': 'secretadmin' }
+  });
+  const visibleCarouselsBody = await visibleCarouselsRes.json();
+  assert.equal(visibleCarouselsBody.data.items.some((item) => item.id === testCarouselId), false);
+
+  const invalidVisibilityRes = await fetch(`http://127.0.0.1:${port}/api/admin/carousels?visibility=deleted`, {
+    headers: { 'x-admin-password': 'secretadmin' }
+  });
+  assert.equal(invalidVisibilityRes.status, 400);
+
+  // Non-admin callers cannot delete another user's carousel.
+  const unauthorizedDeleteRes = await fetch(`http://127.0.0.1:${port}/api/admin/carousels/${testCarouselId}`, {
+    method: 'DELETE'
+  });
+  assert.equal(unauthorizedDeleteRes.status, 401);
+  assert.ok(db.prepare('SELECT id FROM carousels WHERE id = ?').get(testCarouselId));
+
+  // Admin can permanently delete a carousel regardless of ownership.
+  const deleteRes = await fetch(`http://127.0.0.1:${port}/api/admin/carousels/${testCarouselId}`, {
+    method: 'DELETE',
+    headers: { 'x-admin-password': 'secretadmin' }
+  });
+  const deleteBody = await deleteRes.json();
+  assert.equal(deleteRes.status, 200);
+  assert.equal(deleteBody.data.id, testCarouselId);
+  assert.equal(db.prepare('SELECT id FROM carousels WHERE id = ?').get(testCarouselId), undefined);
+
+  // Repeating the deletion returns a clear not-found response.
+  const missingDeleteRes = await fetch(`http://127.0.0.1:${port}/api/admin/carousels/${testCarouselId}`, {
+    method: 'DELETE',
+    headers: { 'x-admin-password': 'secretadmin' }
+  });
+  const missingDeleteBody = await missingDeleteRes.json();
+  assert.equal(missingDeleteRes.status, 404);
+  assert.equal(missingDeleteBody.error.code, 'NOT_FOUND');
 
   server.close();
   db.close();

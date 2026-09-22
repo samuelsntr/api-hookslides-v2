@@ -34,7 +34,7 @@ test('plan and editor migrations preserve legacy users, sessions, and carousels'
 
     assert.equal(db.prepare('SELECT plan FROM users WHERE id = ?').get('legacy-user').plan, 'pro');
     assert.equal(db.prepare('SELECT user_id FROM sessions WHERE id = ?').get('legacy-session').user_id, 'legacy-user');
-    assert.deepEqual(db.prepare('SELECT revision, original_slides_json FROM carousels WHERE id = ?').get('legacy-carousel'), { revision: 1, original_slides_json: '[]' });
+    assert.deepEqual(db.prepare('SELECT revision, original_slides_json, user_deleted_at FROM carousels WHERE id = ?').get('legacy-carousel'), { revision: 1, original_slides_json: '[]', user_deleted_at: null });
     assert.deepEqual(db.pragma('foreign_key_check'), []);
   } finally {
     db.close();

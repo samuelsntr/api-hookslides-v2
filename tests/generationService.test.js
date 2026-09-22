@@ -79,3 +79,21 @@ test('premium user is never blocked regardless of usage', async () => {
   assert.deepEqual(calls, ['extract', 'summarize', 'brief', 'generate', 'save']);
   assert.equal(result.slides.length, 6);
 });
+
+test('Pro generation snapshots the default Brand Kit while opt-out preserves template defaults', async () => {
+  const saved = [];
+  const service = createGenerationService({
+    contentService: { extractContent: async () => ({ content: 'content' }) },
+    aiService: { summarize: async () => 'summary', createEditorialBrief: async () => JSON.stringify(brief), generateCarousel: async () => JSON.stringify({ title: 'Title', summary: 'Summary', slides, captionIdeas: ['Caption one', 'Caption two'], hashtags: ['#tag1', '#tag2'] }) },
+    historyRepository: { countThisMonth: () => 0, createCarouselIfAllowed: (record) => saved.push(record) },
+    brandRepository: { getSnapshot: () => ({ brandKitId: 'kit', brandKitRevision: 3, logoAssetId: 'logo', defaultTemplate: 'template_2', theme: { brandName: 'Acme', primaryColor: '#112233', secondaryColor: '#FFFFFF', accentColor: '#FF5500', headingFont: 'fraunces', bodyFont: 'inter', logoUrl: '/api/brand-assets/logo', showLogo: true } }) },
+    clock: () => new Date('2026-09-22T00:00:00.000Z'), createId: () => `id-${saved.length}`
+  });
+  const branded = await service.generate({ input: 'topic', sourceType: 'topic', strategy: 'viral_hook', template: 'template_1', userId: 'u1', plan: 'pro' });
+  assert.equal(branded.template, 'template_2');
+  assert.equal(branded.brandKitRevision, 3);
+  assert.equal(branded.brandTheme.brandName, 'Acme');
+  const plain = await service.generate({ input: 'topic', sourceType: 'topic', strategy: 'viral_hook', template: 'template_1', brandKitMode: 'none', userId: 'u1', plan: 'pro' });
+  assert.equal(plain.template, 'template_1');
+  assert.equal(plain.brandTheme, null);
+});

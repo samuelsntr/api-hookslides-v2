@@ -71,3 +71,35 @@ test('carousel content edits preserve the AI version and reject stale revisions'
     db.close();
   }
 });
+
+test('user deletion hides history without removing the admin record or quota usage, and restore reverses it', () => {
+  const db = new Database(':memory:');
+  try {
+    runMigrations(db);
+    db.prepare('INSERT INTO users (id, username, password_hash, created_at, plan) VALUES (?, ?, ?, ?, ?)')
+      .run('history-user', 'history-test', 'unused', new Date().toISOString(), 'free');
+    db.prepare('INSERT INTO users (id, username, password_hash, created_at, plan) VALUES (?, ?, ?, ?, ?)')
+      .run('other-user', 'other-test', 'unused', new Date().toISOString(), 'free');
+    const repository = createHistoryRepository(db);
+    const now = new Date().toISOString();
+    repository.createCarousel({
+      id: 'soft-delete-carousel', userId: 'history-user', title: 'Soft delete', sourceType: 'topic', originalInput: 'Topic', extractedContent: 'Topic', source: null,
+      strategy: 'viral_hook', template: 'template_1', language: 'english', slides: [{ type: 'hook', heading: 'Cover', body: 'Body' }], summary: 'Summary', captionIdeas: [], hashtags: [],
+      createdAt: now, updatedAt: now,
+    });
+
+    assert.equal(repository.listCarousels({ userId: 'history-user' }).total, 1);
+    assert.equal(repository.listCarousels({ userId: 'history-user' }).items[0].coverSlide.heading, 'Cover');
+    assert.equal(repository.hideCarousel('soft-delete-carousel', 'other-user', now), false);
+    assert.equal(repository.hideCarousel('soft-delete-carousel', 'history-user', now), true);
+    assert.equal(repository.listCarousels({ userId: 'history-user' }).total, 0);
+    assert.equal(repository.findCarouselById('soft-delete-carousel', 'history-user'), null);
+    assert.equal(repository.countThisMonth('history-user'), 1);
+    assert.equal(db.prepare('SELECT COUNT(*) AS count FROM carousels WHERE id = ?').get('soft-delete-carousel').count, 1);
+    assert.equal(repository.restoreCarousel('soft-delete-carousel', 'other-user'), false);
+    assert.equal(repository.restoreCarousel('soft-delete-carousel', 'history-user'), true);
+    assert.equal(repository.listCarousels({ userId: 'history-user' }).total, 1);
+  } finally {
+    db.close();
+  }
+});

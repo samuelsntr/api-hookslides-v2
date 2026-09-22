@@ -20,7 +20,10 @@ export const createHistoryController = (repository) => ({
     requireCanvasEditor(req.user);
     const existing = repository.findCarouselById(req.params.id, req.user.id);
     if (!existing) throw new AppError('Carousel not found.', { status: 404, code: 'NOT_FOUND' });
-    const item = repository.updateCarouselSlides({ id: req.params.id, userId: req.user.id, slides: req.body.slides, expectedRevision: req.body.expectedRevision, updatedAt: new Date().toISOString() });
+    if (req.body.designOverrides !== undefined && !hasEntitlement(req.user.plan, 'carouselDesignOverrides') && JSON.stringify(req.body.designOverrides) !== JSON.stringify(existing.designOverrides)) {
+      throw new AppError('Carousel design customization is available on the Pro plan.', { status: 403, code: 'FEATURE_NOT_AVAILABLE', details: { feature: 'carouselDesignOverrides', requiredPlans: ['pro'] } });
+    }
+    const item = repository.updateCarouselSlides({ id: req.params.id, userId: req.user.id, slides: req.body.slides, designOverrides: req.body.designOverrides === undefined ? existing.designOverrides : req.body.designOverrides, expectedRevision: req.body.expectedRevision, updatedAt: new Date().toISOString() });
     if (!item) {
       const latest = repository.findCarouselById(req.params.id, req.user.id);
       if (!latest) throw new AppError('Carousel not found.', { status: 404, code: 'NOT_FOUND' });

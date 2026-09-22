@@ -4,9 +4,9 @@ import { validateEditorialBrief } from '../../validators/editorialBrief.js';
 import { extractJson, normalizeContent } from '../../utils/content.js';
 import { normalizePlan } from '../../constants/plans.js';
 
-export function createGenerationService({ contentService, aiService, historyRepository, clock = () => new Date(), createId }) {
+export function createGenerationService({ contentService, aiService, historyRepository, brandRepository, clock = () => new Date(), createId }) {
   return {
-    async generate({ input, sourceType, strategy, template, language = 'english', userId, plan = 'free' }) {
+    async generate({ input, sourceType, strategy, template, language = 'english', brandKitMode = 'auto', userId, plan = 'free' }) {
       plan = normalizePlan(plan);
       const limit = PLAN_LIMITS[plan] ?? PLAN_LIMITS.free;
       if (limit !== Infinity && historyRepository.countThisMonth(userId) >= limit) {
@@ -36,6 +36,7 @@ export function createGenerationService({ contentService, aiService, historyRepo
       if (!result.success) throw new AppError('AI returned invalid carousel data.', { status: 502, code: 'AI_OUTPUT_ERROR' });
 
       const now = clock().toISOString();
+      const brand = plan === 'pro' && brandKitMode === 'auto' ? brandRepository?.getSnapshot(userId) : null;
       const record = {
         id: createId(),
         userId,
@@ -43,6 +44,11 @@ export function createGenerationService({ contentService, aiService, historyRepo
         originalInput: input,
         extractedContent: extracted.content,
         source: extracted.source || null,
+        template: brand?.defaultTemplate || result.data.template,
+        brandKitId: brand?.brandKitId || null,
+        brandKitRevision: brand?.brandKitRevision || null,
+        brandTheme: brand?.theme || null,
+        brandLogoAssetId: brand?.logoAssetId || null,
         createdAt: now,
         updatedAt: now,
       };

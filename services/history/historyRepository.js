@@ -10,8 +10,8 @@ function currentMonthRange(now = new Date()) {
 
 export function createHistoryRepository(db) {
   const insert = db.prepare(`INSERT INTO carousels
-    (id, user_id, title, source_type, original_input, extracted_content, source_json, strategy, template, language, slides_json, original_slides_json, revision, summary, caption_ideas_json, hashtags_json, created_at, updated_at)
-    VALUES (@id, @userId, @title, @sourceType, @originalInput, @extractedContent, @sourceJson, @strategy, @template, @language, @slidesJson, @originalSlidesJson, 1, @summary, @captionIdeasJson, @hashtagsJson, @createdAt, @updatedAt)`);
+    (id, user_id, title, source_type, original_input, extracted_content, source_json, strategy, template, language, slides_json, original_slides_json, revision, summary, caption_ideas_json, hashtags_json, brand_kit_id, brand_kit_revision, brand_snapshot_json, brand_logo_asset_id, created_at, updated_at)
+    VALUES (@id, @userId, @title, @sourceType, @originalInput, @extractedContent, @sourceJson, @strategy, @template, @language, @slidesJson, @originalSlidesJson, 1, @summary, @captionIdeasJson, @hashtagsJson, @brandKitId, @brandKitRevision, @brandSnapshotJson, @brandLogoAssetId, @createdAt, @updatedAt)`);
   const countThisMonth = db.prepare('SELECT COUNT(*) AS count FROM carousels WHERE user_id = ? AND created_at >= ? AND created_at < ?');
 
   function runInsert(record) {
@@ -23,6 +23,10 @@ export function createHistoryRepository(db) {
       originalSlidesJson: JSON.stringify(record.slides),
       captionIdeasJson: JSON.stringify(record.captionIdeas),
       hashtagsJson: JSON.stringify(record.hashtags),
+      brandKitId: record.brandKitId || null,
+      brandKitRevision: record.brandKitRevision || null,
+      brandSnapshotJson: record.brandTheme ? JSON.stringify(record.brandTheme) : null,
+      brandLogoAssetId: record.brandLogoAssetId || null,
     });
     return record;
   }
@@ -56,7 +60,7 @@ export function createHistoryRepository(db) {
     },
     listCarousels({ page = 1, limit = 20, userId }) {
       const total = db.prepare('SELECT COUNT(*) AS total FROM carousels WHERE user_id = ? AND user_deleted_at IS NULL').get(userId).total;
-      const rows = db.prepare(`SELECT id, title, source_type, source_json, template, language, summary, slides_json, created_at, updated_at
+      const rows = db.prepare(`SELECT id, title, source_type, source_json, template, language, summary, slides_json, brand_snapshot_json, style_overrides_json, created_at, updated_at
         FROM carousels
         WHERE user_id = ? AND user_deleted_at IS NULL
         ORDER BY created_at DESC
@@ -79,6 +83,8 @@ export function createHistoryRepository(db) {
             language: row.language || 'english',
             summary: row.summary,
             coverSlide,
+            brandTheme: row.brand_snapshot_json ? JSON.parse(row.brand_snapshot_json) : null,
+            designOverrides: row.style_overrides_json ? JSON.parse(row.style_overrides_json) : null,
             createdAt: row.created_at,
             updatedAt: row.updated_at,
           };
@@ -87,11 +93,11 @@ export function createHistoryRepository(db) {
       };
     },
     findCarouselById(id, userId) { return toCarousel(db.prepare('SELECT * FROM carousels WHERE id = ? AND user_id = ? AND user_deleted_at IS NULL').get(id, userId)); },
-    updateCarouselSlides({ id, userId, slides, expectedRevision, updatedAt }) {
+    updateCarouselSlides({ id, userId, slides, designOverrides, expectedRevision, updatedAt }) {
       const result = db.prepare(`UPDATE carousels
-        SET slides_json = ?, revision = revision + 1, updated_at = ?
+        SET slides_json = ?, style_overrides_json = ?, revision = revision + 1, updated_at = ?
         WHERE id = ? AND user_id = ? AND user_deleted_at IS NULL AND revision = ?`)
-        .run(JSON.stringify(slides), updatedAt, id, userId, expectedRevision);
+        .run(JSON.stringify(slides), designOverrides ? JSON.stringify(designOverrides) : null, updatedAt, id, userId, expectedRevision);
       if (!result.changes) return null;
       return toCarousel(db.prepare('SELECT * FROM carousels WHERE id = ? AND user_id = ? AND user_deleted_at IS NULL').get(id, userId));
     },

@@ -12,16 +12,21 @@ import { createAiService } from './services/ai/aiService.js';
 import { createGenerationService } from './services/generation/generationService.js';
 import { createId } from './utils/ids.js';
 import { createApp } from './app.js';
+import { createBrandRepository } from './services/brand/brandRepository.js';
+import { createLogoStorage } from './services/brand/logoStorage.js';
 
 const db = createDatabase(env.databasePath);
 runMigrations(db);
 const history = createHistoryRepository(db);
+const brand = createBrandRepository(db);
+const logoStorage = createLogoStorage({ uploadsPath: env.uploadsPath });
+await logoStorage.ensureReady();
 const content = createContentService({ articleExtractor: createArticleExtractor(), youtubeExtractor: createYouTubeExtractor() });
 const primary = env.groqApiKey ? createGroqProvider({ apiKey: env.groqApiKey, model: env.groqModel }) : createOpenAIProvider({ apiKey: env.openaiApiKey });
 const fallback = env.groqApiKey && env.openaiApiKey ? createOpenAIProvider({ apiKey: env.openaiApiKey }) : null;
 const ai = createAiService({ primary, fallback, logger });
-const generation = createGenerationService({ contentService: content, aiService: ai, historyRepository: history, createId });
-const app = createApp({ database: db, services: { generation, extraction: content, history } });
+const generation = createGenerationService({ contentService: content, aiService: ai, historyRepository: history, brandRepository: brand, createId });
+const app = createApp({ database: db, services: { generation, extraction: content, history, brand, logoStorage } });
 const server = app.listen(env.port, () => logger.info({ port: env.port }, 'HookSlides server listening'));
 
 const shutdown = () => server.close(() => { db.close(); process.exit(0); });

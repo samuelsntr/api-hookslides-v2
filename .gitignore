@@ -11,6 +11,8 @@ node_modules/
 *.sqlite-shm
 *.sqlite-wal
 server/data/
+uploads/*
+!uploads/.gitkeep
 
 # Logs
 *.log

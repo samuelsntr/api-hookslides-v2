@@ -47,3 +47,25 @@ test('Creator can load and update only an owned carousel', () => {
   controller.getEditor({ params: { id: 'carousel' }, user: { id: 'different-user', plan: 'pro' } }, responseRecorder(), (error) => { rejected = error; });
   assert.equal(rejected.status, 404);
 });
+
+test('history controller soft-deletes and restores only owned carousels', () => {
+  const calls = [];
+  const controller = createHistoryController({
+    hideCarousel: (id, userId) => { calls.push(['hide', id, userId]); return userId === 'owner'; },
+    restoreCarousel: (id, userId) => { calls.push(['restore', id, userId]); return userId === 'owner'; },
+  });
+  const removeResponse = responseRecorder();
+  controller.remove({ params: { id: 'carousel' }, user: { id: 'owner' } }, removeResponse, (error) => { throw error; });
+  assert.equal(removeResponse.body.data.id, 'carousel');
+  const restoreResponse = responseRecorder();
+  controller.restore({ params: { id: 'carousel' }, user: { id: 'owner' } }, restoreResponse, (error) => { throw error; });
+  assert.equal(restoreResponse.body.data.id, 'carousel');
+  let rejected;
+  controller.restore({ params: { id: 'carousel' }, user: { id: 'other' } }, responseRecorder(), (error) => { rejected = error; });
+  assert.equal(rejected.status, 404);
+  assert.deepEqual(calls.map((call) => call.slice(0, 3)), [
+    ['hide', 'carousel', 'owner'],
+    ['restore', 'carousel', 'owner'],
+    ['restore', 'carousel', 'other'],
+  ]);
+});

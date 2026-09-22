@@ -7,6 +7,10 @@ export function toCarousel(row) {
     strategy: row.strategy, template: row.template, language: row.language || 'english', slides: JSON.parse(row.slides_json),
     originalSlides: JSON.parse(row.original_slides_json || row.slides_json), revision: row.revision || 1,
     summary: row.summary, captionIdeas: JSON.parse(row.caption_ideas_json || '[]'), hashtags: JSON.parse(row.hashtags_json || '[]'),
+    brandKitId: row.brand_kit_id || null,
+    brandKitRevision: row.brand_kit_revision || null,
+    brandTheme: row.brand_snapshot_json ? JSON.parse(row.brand_snapshot_json) : null,
+    designOverrides: row.style_overrides_json ? JSON.parse(row.style_overrides_json) : null,
     createdAt: row.created_at, updatedAt: row.updated_at, hiddenByUserAt: row.user_deleted_at || null
   };
 }
