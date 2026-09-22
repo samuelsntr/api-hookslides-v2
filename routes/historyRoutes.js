@@ -6,4 +6,5 @@ export const createHistoryRoutes = (controller) => Router()
   .get('/history/:id/editor', validate(idParamSchema, 'params'), controller.getEditor)
   .patch('/history/:id/editor', validate(idParamSchema, 'params'), validate(editorUpdateSchema), controller.updateEditor)
   .get('/history/:id', validate(idParamSchema, 'params'), controller.get)
-  .delete('/history/:id', validate(idParamSchema, 'params'), controller.remove);
+  .delete('/history/:id', validate(idParamSchema, 'params'), controller.remove)
+  .post('/history/:id/restore', validate(idParamSchema, 'params'), controller.restore);

@@ -55,19 +55,53 @@ export function createHistoryRepository(db) {
       return countThisMonth.get(userId, start, end).count;
     },
     listCarousels({ page = 1, limit = 20, userId }) {
-      const total = db.prepare('SELECT COUNT(*) AS total FROM carousels WHERE user_id = ?').get(userId).total;
-      const rows = db.prepare('SELECT * FROM carousels WHERE user_id = ? ORDER BY created_at DESC LIMIT ? OFFSET ?').all(userId, limit, (page - 1) * limit);
-      return { items: rows.map(toCarousel), total };
+      const total = db.prepare('SELECT COUNT(*) AS total FROM carousels WHERE user_id = ? AND user_deleted_at IS NULL').get(userId).total;
+      const rows = db.prepare(`SELECT id, title, source_type, source_json, template, language, summary, slides_json, created_at, updated_at
+        FROM carousels
+        WHERE user_id = ? AND user_deleted_at IS NULL
+        ORDER BY created_at DESC
+        LIMIT ? OFFSET ?`).all(userId, limit, (page - 1) * limit);
+      return {
+        items: rows.map((row) => {
+          let source = null;
+          let coverSlide = null;
+          try { source = row.source_json ? JSON.parse(row.source_json) : null; } catch { source = null; }
+          try {
+            const slides = JSON.parse(row.slides_json || '[]');
+            coverSlide = Array.isArray(slides) ? slides[0] || null : null;
+          } catch { coverSlide = null; }
+          return {
+            id: row.id,
+            title: row.title,
+            sourceType: row.source_type,
+            source,
+            template: row.template,
+            language: row.language || 'english',
+            summary: row.summary,
+            coverSlide,
+            createdAt: row.created_at,
+            updatedAt: row.updated_at,
+          };
+        }),
+        total,
+      };
     },
-    findCarouselById(id, userId) { return toCarousel(db.prepare('SELECT * FROM carousels WHERE id = ? AND user_id = ?').get(id, userId)); },
+    findCarouselById(id, userId) { return toCarousel(db.prepare('SELECT * FROM carousels WHERE id = ? AND user_id = ? AND user_deleted_at IS NULL').get(id, userId)); },
     updateCarouselSlides({ id, userId, slides, expectedRevision, updatedAt }) {
       const result = db.prepare(`UPDATE carousels
         SET slides_json = ?, revision = revision + 1, updated_at = ?
-        WHERE id = ? AND user_id = ? AND revision = ?`)
+        WHERE id = ? AND user_id = ? AND user_deleted_at IS NULL AND revision = ?`)
         .run(JSON.stringify(slides), updatedAt, id, userId, expectedRevision);
       if (!result.changes) return null;
-      return toCarousel(db.prepare('SELECT * FROM carousels WHERE id = ? AND user_id = ?').get(id, userId));
+      return toCarousel(db.prepare('SELECT * FROM carousels WHERE id = ? AND user_id = ? AND user_deleted_at IS NULL').get(id, userId));
     },
-    deleteCarousel(id, userId) { return db.prepare('DELETE FROM carousels WHERE id = ? AND user_id = ?').run(id, userId).changes > 0; }
+    hideCarousel(id, userId, deletedAt) {
+      return db.prepare('UPDATE carousels SET user_deleted_at = ? WHERE id = ? AND user_id = ? AND user_deleted_at IS NULL')
+        .run(deletedAt, id, userId).changes > 0;
+    },
+    restoreCarousel(id, userId) {
+      return db.prepare('UPDATE carousels SET user_deleted_at = NULL WHERE id = ? AND user_id = ? AND user_deleted_at IS NOT NULL')
+        .run(id, userId).changes > 0;
+    }
   };
 }

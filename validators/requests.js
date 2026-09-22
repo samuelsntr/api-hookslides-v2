@@ -13,6 +13,15 @@ export const extractRequestSchema = base;
 export const historyQuerySchema = z.object({ page: z.coerce.number().int().min(1).default(1), limit: z.coerce.number().int().min(1).max(50).default(20) }).strict();
 export const idParamSchema = z.object({ id: z.string().uuid() }).strict();
 export const adminUserPlanSchema = z.object({ plan: z.enum(PLANS) }).strict();
+export const adminCarouselQuerySchema = z.object({
+  page: z.coerce.number().int().min(1).default(1),
+  limit: z.coerce.number().int().min(1).max(100).default(20),
+  q: z.string().trim().max(200).optional(),
+  sourceType: z.enum(SOURCE_TYPES).optional(),
+  strategy: z.enum(STRATEGIES).optional(),
+  userId: z.string().trim().max(100).optional(),
+  visibility: z.enum(['all', 'visible', 'hidden']).default('all'),
+}).strict();
 
 const editableSlideSchema = z.object({
   type: z.string(),

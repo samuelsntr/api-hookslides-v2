@@ -160,7 +160,7 @@ export function createAdminController(db) {
       }
 
       const carousels = db.prepare(`
-        SELECT id, title, source_type, strategy, template, created_at, updated_at
+        SELECT id, title, source_type, strategy, template, created_at, updated_at, user_deleted_at
         FROM carousels 
         WHERE user_id = ? 
         ORDER BY created_at DESC 
@@ -204,13 +204,15 @@ export function createAdminController(db) {
     },
 
     getCarousels(req, res) {
-      const page = Math.max(1, parseInt(req.query.page, 10) || 1);
-      const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+      const query = req.validatedQuery || req.query;
+      const page = Math.max(1, parseInt(query.page, 10) || 1);
+      const limit = Math.min(100, Math.max(1, parseInt(query.limit, 10) || 20));
       const offset = (page - 1) * limit;
-      const search = (req.query.q || '').trim();
-      const sourceType = (req.query.sourceType || '').trim();
-      const strategy = (req.query.strategy || '').trim();
-      const userId = (req.query.userId || '').trim();
+      const search = (query.q || '').trim();
+      const sourceType = (query.sourceType || '').trim();
+      const strategy = (query.strategy || '').trim();
+      const userId = (query.userId || '').trim();
+      const visibility = query.visibility || 'all';
 
       const conditions = [];
       const params = [];
@@ -233,6 +235,12 @@ export function createAdminController(db) {
       if (userId) {
         conditions.push('c.user_id = ?');
         params.push(userId);
+      }
+
+      if (visibility === 'visible') {
+        conditions.push('c.user_deleted_at IS NULL');
+      } else if (visibility === 'hidden') {
+        conditions.push('c.user_deleted_at IS NOT NULL');
       }
 
       const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -259,7 +267,8 @@ export function createAdminController(db) {
           c.caption_ideas_json,
           c.hashtags_json,
           c.created_at,
-          c.updated_at
+          c.updated_at,
+          c.user_deleted_at
         FROM carousels c
         LEFT JOIN users u ON c.user_id = u.id
         ${whereClause}
@@ -287,7 +296,8 @@ export function createAdminController(db) {
           summary: row.summary,
           slideCount,
           createdAt: row.created_at,
-          updatedAt: row.updated_at
+          updatedAt: row.updated_at,
+          hiddenByUserAt: row.user_deleted_at || null
         };
       });
 
@@ -330,6 +340,21 @@ export function createAdminController(db) {
             username: row.username || 'Anonymous / Legacy'
           }
         }
+      });
+    },
+
+    deleteCarousel(req, res, next) {
+      const { id } = req.params;
+      const result = db.prepare('DELETE FROM carousels WHERE id = ?').run(id);
+
+      if (result.changes === 0) {
+        return next(new AppError('Carousel not found.', { status: 404, code: 'NOT_FOUND' }));
+      }
+
+      return res.json({
+        success: true,
+        message: 'Carousel deleted successfully.',
+        data: { id }
       });
     }
   };

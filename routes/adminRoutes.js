@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import { adminAuth } from '../middleware/adminAuth.js';
 import { validate } from '../middleware/validate.js';
-import { adminUserPlanSchema } from '../validators/requests.js';
+import { adminCarouselQuerySchema, adminUserPlanSchema } from '../validators/requests.js';
 
 export function createAdminRoutes(controller) {
   const router = Router();
@@ -14,8 +14,9 @@ export function createAdminRoutes(controller) {
   router.get('/admin/users', controller.getUsers);
   router.get('/admin/users/:id', controller.getUserById);
   router.patch('/admin/users/:id/plan', validate(adminUserPlanSchema), controller.updateUserPlan);
-  router.get('/admin/carousels', controller.getCarousels);
+  router.get('/admin/carousels', validate(adminCarouselQuerySchema, 'query'), controller.getCarousels);
   router.get('/admin/carousels/:id', controller.getCarouselById);
+  router.delete('/admin/carousels/:id', controller.deleteCarousel);
 
   return router;
 }

@@ -6,6 +6,7 @@ export function toCarousel(row) {
     source: row.source_json ? JSON.parse(row.source_json) : null,
     strategy: row.strategy, template: row.template, language: row.language || 'english', slides: JSON.parse(row.slides_json),
     originalSlides: JSON.parse(row.original_slides_json || row.slides_json), revision: row.revision || 1,
-    summary: row.summary, captionIdeas: JSON.parse(row.caption_ideas_json || '[]'), hashtags: JSON.parse(row.hashtags_json || '[]'), createdAt: row.created_at, updatedAt: row.updated_at
+    summary: row.summary, captionIdeas: JSON.parse(row.caption_ideas_json || '[]'), hashtags: JSON.parse(row.hashtags_json || '[]'),
+    createdAt: row.created_at, updatedAt: row.updated_at, hiddenByUserAt: row.user_deleted_at || null
   };
 }
