@@ -21,7 +21,10 @@ const history = createHistoryRepository(db);
 const brand = createBrandRepository(db);
 const logoStorage = createLogoStorage({ uploadsPath: env.uploadsPath });
 await logoStorage.ensureReady();
-const content = createContentService({ articleExtractor: createArticleExtractor(), youtubeExtractor: createYouTubeExtractor() });
+const content = createContentService({
+  articleExtractor: createArticleExtractor(),
+  youtubeExtractor: createYouTubeExtractor({ supadataApiKey: env.supadataApiKey, logger }),
+});
 const primary = env.groqApiKey ? createGroqProvider({ apiKey: env.groqApiKey, model: env.groqModel }) : createOpenAIProvider({ apiKey: env.openaiApiKey });
 const fallback = env.groqApiKey && env.openaiApiKey ? createOpenAIProvider({ apiKey: env.openaiApiKey }) : null;
 const ai = createAiService({ primary, fallback, logger });

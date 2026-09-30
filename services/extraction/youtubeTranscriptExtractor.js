@@ -56,7 +56,7 @@ function transcriptError(error) {
 function joinTranscript(segments) {
   let result = '';
   for (const segment of Array.isArray(segments) ? segments : []) {
-    const text = normalizeContent(segment?.text || '', LIMITS.content);
+    const text = normalizeContent(typeof segment === 'string' ? segment : segment?.text || '', LIMITS.content);
     if (!text) continue;
     const remaining = LIMITS.content - result.length - (result ? 1 : 0);
     if (remaining <= 0) break;
@@ -65,7 +65,49 @@ function joinTranscript(segments) {
   return normalizeContent(result);
 }
 
-export function createYouTubeExtractor({ transcriptClient = YoutubeTranscript, fetchImpl = fetch } = {}) {
+class SupadataError extends Error {
+  constructor(message, { status = null, unavailable = false } = {}) {
+    super(message);
+    this.status = status;
+    this.unavailable = unavailable;
+  }
+}
+
+function supadataSegments(payload) {
+  if (typeof payload?.content === 'string') return [payload.content];
+  if (Array.isArray(payload?.content)) return payload.content;
+  if (Array.isArray(payload?.transcript)) return payload.transcript;
+  return [];
+}
+
+async function fetchSupadataTranscript(id, { apiKey, fetchImpl, timeoutMs }) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(new SupadataError('Supadata request timed out.', { status: 504 })), timeoutMs);
+
+  try {
+    const headers = { accept: 'application/json', 'x-api-key': apiKey };
+    const videoUrl = `https://www.youtube.com/watch?v=${id}`;
+    const response = await fetchImpl(`https://api.supadata.ai/v1/youtube/transcript?url=${encodeURIComponent(videoUrl)}&text=false`, { headers, signal: controller.signal });
+    const payload = await response.json().catch(() => ({}));
+
+    if (response.status === 404) throw new SupadataError('Transcript unavailable.', { status: 404, unavailable: true });
+    if (!response.ok || payload?.status === 'failed') throw new SupadataError('Supadata request failed.', { status: response.status });
+
+    const segments = supadataSegments(payload);
+    if (!segments.length) throw new SupadataError('Supadata returned no transcript.', { unavailable: payload?.status === 'completed' });
+    return segments;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+export function createYouTubeExtractor({
+  transcriptClient = YoutubeTranscript,
+  fetchImpl = fetch,
+  supadataApiKey = null,
+  logger = console,
+  providerTimeoutMs = 8_000,
+} = {}) {
   return async function extractYouTubeTranscript(value) {
     let id;
     try { id = parseYouTubeId(value); } catch { id = null; }
@@ -78,10 +120,34 @@ export function createYouTubeExtractor({ transcriptClient = YoutubeTranscript, f
     const timedFetch = (url, options = {}) => fetchImpl(url, { ...options, signal: controller.signal });
 
     try {
-      const [segments, metadata] = await Promise.all([
-        transcriptClient.fetchTranscript(id, { fetch: timedFetch }),
-        fetchYouTubeMetadata(id, timedFetch, controller.signal).catch(() => null),
-      ]);
+      const metadataPromise = fetchYouTubeMetadata(id, timedFetch, controller.signal).catch(() => null);
+      let segments;
+
+      if (supadataApiKey) {
+        const startedAt = Date.now();
+        try {
+          segments = await fetchSupadataTranscript(id, {
+            apiKey: supadataApiKey,
+            fetchImpl,
+            timeoutMs: providerTimeoutMs,
+          });
+          logger.info?.({ provider: 'supadata', durationMs: Date.now() - startedAt, videoIdSuffix: id.slice(-4) }, 'YouTube transcript retrieved');
+        } catch (error) {
+          if (error?.unavailable) {
+            throw new AppError('This video has no transcript or captions available.', { status: 422, code: 'YOUTUBE_TRANSCRIPT_UNAVAILABLE' });
+          }
+          logger.warn?.({
+            provider: 'supadata',
+            durationMs: Date.now() - startedAt,
+            status: error?.status ?? null,
+            errorName: error?.name || 'Error',
+            videoIdSuffix: id.slice(-4),
+          }, 'YouTube transcript provider failed; trying fallback');
+        }
+      }
+
+      if (!segments) segments = await transcriptClient.fetchTranscript(id, { fetch: timedFetch });
+      const metadata = await metadataPromise;
       const content = joinTranscript(segments);
       if (!content) throw new YoutubeTranscriptNotAvailableError(id);
 

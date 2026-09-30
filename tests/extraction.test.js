@@ -86,6 +86,92 @@ test('joins transcript segments and returns video attribution', async () => {
   });
 });
 
+test('uses Supadata transcripts when configured', async () => {
+  let legacyCalls = 0;
+  const requests = [];
+  const extract = createYouTubeExtractor({
+    supadataApiKey: 'test-key',
+    transcriptClient: { fetchTranscript: async () => { legacyCalls += 1; return [{ text: 'legacy' }]; } },
+    fetchImpl: async (url, options = {}) => {
+      requests.push({ url: String(url), apiKey: options.headers?.['x-api-key'] });
+      if (String(url).startsWith('https://api.supadata.ai/')) {
+        return new Response(JSON.stringify({ content: [{ text: 'managed transcript' }] }), {
+          status: 200,
+          headers: { 'content-type': 'application/json' },
+        });
+      }
+      return metadataFetch();
+    },
+  });
+
+  const result = await extract(`https://youtube.com/watch?v=${VIDEO_ID}`);
+
+  assert.equal(result.content, 'managed transcript');
+  assert.equal(legacyCalls, 0);
+  assert.deepEqual(requests[0], {
+    url: `https://api.supadata.ai/v1/youtube/transcript?url=${encodeURIComponent(`https://www.youtube.com/watch?v=${VIDEO_ID}`)}&text=false`,
+    apiKey: 'test-key',
+  });
+});
+
+test('falls back to the existing extractor when Supadata times out', async () => {
+  const extract = createYouTubeExtractor({
+    supadataApiKey: 'test-key',
+    providerTimeoutMs: 1,
+    logger: { warn() {}, info() {} },
+    transcriptClient: { fetchTranscript: async () => [{ text: 'legacy after timeout' }] },
+    fetchImpl: async (url, options = {}) => {
+      if (!String(url).startsWith('https://api.supadata.ai/')) return metadataFetch();
+      return new Promise((resolve, reject) => {
+        options.signal.addEventListener('abort', () => reject(options.signal.reason), { once: true });
+      });
+    },
+  });
+
+  const result = await extract(`https://youtube.com/watch?v=${VIDEO_ID}`);
+
+  assert.equal(result.content, 'legacy after timeout');
+});
+
+test('falls back to the existing extractor when Supadata is temporarily unavailable', async () => {
+  const warnings = [];
+  const extract = createYouTubeExtractor({
+    supadataApiKey: 'test-key',
+    logger: { warn(fields, message) { warnings.push({ fields, message }); }, info() {} },
+    transcriptClient: { fetchTranscript: async () => [{ text: 'legacy fallback' }] },
+    fetchImpl: async (url) => String(url).startsWith('https://api.supadata.ai/')
+      ? new Response(JSON.stringify({ error: 'temporarily unavailable' }), { status: 503 })
+      : metadataFetch(),
+  });
+
+  const result = await extract(`https://youtube.com/watch?v=${VIDEO_ID}`);
+
+  assert.equal(result.content, 'legacy fallback');
+  assert.equal(warnings.length, 1);
+  assert.equal(warnings[0].fields.provider, 'supadata');
+  assert.equal(warnings[0].fields.status, 503);
+  assert.equal(warnings[0].fields.videoIdSuffix, VIDEO_ID.slice(-4));
+  assert.equal(warnings[0].message, 'YouTube transcript provider failed; trying fallback');
+  assert.equal('apiKey' in warnings[0].fields, false);
+});
+
+test('does not fall back when Supadata confirms captions are unavailable', async () => {
+  let legacyCalls = 0;
+  const extract = createYouTubeExtractor({
+    supadataApiKey: 'test-key',
+    transcriptClient: { fetchTranscript: async () => { legacyCalls += 1; return [{ text: 'must not be used' }]; } },
+    fetchImpl: async (url) => String(url).startsWith('https://api.supadata.ai/')
+      ? new Response(JSON.stringify({ error: 'Transcript not available' }), { status: 404 })
+      : metadataFetch(),
+  });
+
+  await assert.rejects(
+    () => extract(`https://youtube.com/watch?v=${VIDEO_ID}`),
+    (error) => error.code === 'YOUTUBE_TRANSCRIPT_UNAVAILABLE' && error.status === 422,
+  );
+  assert.equal(legacyCalls, 0);
+});
+
 test('truncates very long transcripts', async () => {
   const extract = createYouTubeExtractor({
     transcriptClient: { fetchTranscript: async () => Array.from({ length: 5000 }, () => ({ text: 'a useful transcript segment with several words' })) },

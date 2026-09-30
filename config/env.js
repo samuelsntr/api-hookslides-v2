@@ -9,6 +9,7 @@ const schema = z.object({
   GROQ_API_KEY: z.string().trim().optional(),
   OPENAI_API_KEY: z.string().trim().optional(),
   GROQ_MODEL: z.string().min(1).default('llama-3.3-70b-versatile'),
+  SUPADATA_API_KEY: z.string().trim().optional(),
   ADMIN_PASSWORD: z.string().trim().optional()
 });
 
@@ -24,5 +25,6 @@ export const env = {
   groqApiKey: parsed.GROQ_API_KEY || null,
   openaiApiKey: parsed.OPENAI_API_KEY || null,
   groqModel: parsed.GROQ_MODEL,
+  supadataApiKey: parsed.SUPADATA_API_KEY || null,
   adminPassword: parsed.ADMIN_PASSWORD || 'secretadmin'
 };
